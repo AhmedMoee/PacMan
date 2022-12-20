@@ -1,0 +1,365 @@
+
+"""
+"Pac-man" style gameplay with one level and randomly spread
+collectables that you must collect before the timer runs out!
+Watch out for enemies or Game Over!
+
+Three basic features:
+User Input- arrow keys control movement of character
+Game Over- if the character is gets too close to an enemy or the
+timer runs out without collecting all the pieces
+Graphics- Pac-man sprite sheet and enemy images
+
+Four Additional Features:
+Collectables- grab all the randomized collectable
+pieces you can before the timer is out
+Enemies - two enemies, if you get too close, Game Over!
+Timer- if you don't collect all the pieces before the timer
+is out, Game Over! A set countdown timer of 30 seconds for the round
+Restart from Game Over - Press "r" to restart at the end of the game
+to restart the round
+"""
+
+import uvage
+import random
+
+SCREEN_HEIGHT = 600
+SCREEN_WIDTH = 800
+camera = uvage.Camera(800, 600)         #Only one camera
+coins = []      #List that tracks the amount of coins generated
+random_x = random.randint(50, int(.9 * SCREEN_WIDTH))   #random coin position generator
+random_y = random.randint(50, int(.85 * SCREEN_HEIGHT))     #random coin position generator
+
+def reset():
+    """
+    This function sets up the game from scratch and can be called to reset the game to the beginning
+    :return: Game Setup
+    """
+    global frame, facing_right, floor, walls, timer, coins, timer_display, badguy, facing_up, coins, random_y, random_x
+    global pacman, pacman_images, is_moving, facing_down, ceiling, lost, gameover, gameon, intro, coinstouched, win, set_up
+    global badguy,badguy2, gameon, gameover, reverse
+    frame = 0
+    facing_right = True     #These global variables will determine the motion of pacman so he never is upside down
+    facing_up = False
+    facing_down = False
+    gameon = False      #These global variables set up the winning, losing, or beginning screen
+    gameover = False
+    win = False
+    lost = uvage.from_text(400, 250, 'Game Over! Press R to play again', 45, "red", True)
+    intro = uvage.from_text(400, 250, 'Press Spacebar to Play!', 55, "red", True)
+    coinstouched = 0    #tracks the amount of pieces collected by pacman
+    pacman_images = uvage.load_sprite_sheet("pacmansprite-removebg-preview.png", rows=3, columns=2)     #pacman spritesheet
+    pacman = uvage.from_image(400, 300, pacman_images[0])       #initial pacman image
+    pacman.size = [40, 40]
+    is_moving = False       #tracks which image to use when in motion or not in motion
+    walls = [       #the screen boundaries and the maze walls
+        uvage.from_color(0, SCREEN_HEIGHT / 2, "green", 10, SCREEN_HEIGHT),
+        uvage.from_color(SCREEN_WIDTH, SCREEN_HEIGHT / 2, "green", 10, SCREEN_HEIGHT),
+        uvage.from_color(SCREEN_WIDTH / 2, 0, 'green', SCREEN_WIDTH, 10),
+        uvage.from_color(SCREEN_WIDTH / 2, SCREEN_HEIGHT, "green", SCREEN_WIDTH, 10),
+        uvage.from_color(100, 80, 'blue', 80, 20),
+        uvage.from_color(250, 80, 'blue', 120, 20),
+        uvage.from_color(550, 80, 'blue', 120, 20),
+        uvage.from_color(700, 80, 'blue', 80, 20),
+        uvage.from_color(100, 150, 'blue', 80, 15),
+        uvage.from_color(700, 150, 'blue', 80, 15),
+        uvage.from_color(400, 150, 'blue', 175, 15),
+        uvage.from_color(400, 350, 'blue', 125, 10),
+        uvage.from_color(400, 400, 'blue', 175, 15),
+        uvage.from_color(100, 400, 'blue', 80, 20),
+        uvage.from_color(700, 400, 'blue', 80, 20),
+        uvage.from_color(250, 460, 'blue', 120, 20),
+        uvage.from_color(550, 460, 'blue', 120, 20),
+        uvage.from_color(185, 540, 'blue', 250, 20),
+        uvage.from_color(615, 540, 'blue', 250, 20),
+        uvage.from_color(40, 480, 'blue', 80, 20),
+        uvage.from_color(70, 260, 'blue', 150, 15),
+        uvage.from_color(70, 340, 'blue', 150, 15),
+        uvage.from_color(730, 260, 'blue', 150, 15),
+        uvage.from_color(730, 340, 'blue', 150, 15),
+        uvage.from_color(400, 560, 'blue', 20, 100),
+        uvage.from_color(400, 40, 'blue', 20, 100),
+        uvage.from_color(400, 180, 'blue', 20, 60),
+        uvage.from_color(345, 300, 'blue', 15, 100),
+        uvage.from_color(455, 300, 'blue', 15, 100),
+        uvage.from_color(400, 435, 'blue', 20, 75),
+        uvage.from_color(130, 435, 'blue', 20, 70),
+        uvage.from_color(670, 435, 'blue', 20, 70),
+        uvage.from_color(250, 300, 'blue', 20, 100),
+        uvage.from_color(550, 300, 'blue', 20, 100),
+    ]
+    badguy = uvage.from_image(350, 490, 'ghostimage-removebg-preview.png')      #badguys
+    badguy2 = uvage.from_image(600, 120, 'ghostimage-removebg-preview.png')
+    badguy.size = [30, 30]
+    badguy2.size = [30, 30]
+    timer = 31      #30 seconds on the timer for player to collect pieces
+    reverse = False     #Tracks whether the bad guys in motion are close to the screen boundaries
+    for i in range(0, 31):   #creates coins if not already set up
+        random_x = random.randint(50, int(.9 * SCREEN_WIDTH))
+        random_y = random.randint(50, int(.85 * SCREEN_HEIGHT))
+        if len(coins) <= 20:
+            coins.append(uvage.from_color(random_x, random_y, 'yellow', 12, 12))
+            set_up = True
+    startgamemessage = uvage.from_text(400, 200, "Press Spacebar to Start Game!", 55, 'red', True)
+    set_up = True
+    camera.draw(startgamemessage)
+
+def draw_environment():
+    """
+    This function draws some of the environment and sets up the game for reset depending on whether the player has reached
+    Gameover, if they win, or at the start screen
+    :return:None
+    """
+    global gameon, gameover, timer, timer_display, lost, coins, win, winmessage, set_up, coins, reverse
+    for w in walls:
+        camera.draw(w)
+    startgamemessage = uvage.from_text(400, 200, "Press Spacebar to Start Game!", 55, 'red', True)
+    for all in coins:       #coins will not generate on the walls or game message
+        if all.touches(startgamemessage):
+            all.move_to_stop_overlapping(startgamemessage)
+        if all.touches(w):
+            all.move_to_stop_overlapping(w)
+    if gameon == False and gameover == False and win == False and set_up == True:   #if the coins are already setup, game begins
+        camera.draw(startgamemessage)
+        if uvage.is_pressing('space'):
+            gameon = True
+    if gameon == False and gameover == False and win == False and set_up == False:  #if the coins aren't setup, setup and game begins
+        coins = []
+        reset()
+        set_up = True
+        camera.draw(startgamemessage)
+        if uvage.is_pressing('space'):
+            gameon = True
+    if gameon == False and gameover and win == False:   #Gameover! if gameover is true, display lost screen and allow to restart
+        camera.draw(lost)
+        set_up = False
+        if uvage.is_pressing('r'):
+            gameon = False
+            win = False
+            gameover = False
+            coins = []
+            reset()
+            timer = 31
+    if win:     #you win! allow player to restart game again
+        camera.draw(winmessage)
+        set_up = False
+        gameon = False
+        coins = []
+        if uvage.is_pressing('r'):
+            gameon = False
+            win = False
+            gameover = False
+            reset()
+            timer = 31
+    for all in coins:   #coins will never generate in the walls
+        for wall in walls:
+            if all.touches(wall):
+                all.move_to_stop_overlapping(wall)
+    if gameon == True and gameover== False and win == False and reverse == False: #initialized constant positional change for badguys
+        badguy2.x -= 3
+        badguy.x += 3
+
+
+def handle_badguy():
+    """
+    This function prevents badguys from going off the screen, allows continual movement, and causes Gameover if the
+    pacman touches the badguy
+    :return: None
+    """
+    global camera, badguy, gameover, gameon, timer, win, set_up, badguy2
+    reverse = False
+    if gameon:         #boundaries for the enemies
+        if badguy.x > 750:
+            reverse = True
+        elif badguy.x < 50:
+            reverse = True
+        if badguy2.x < 50:
+            reverse = True
+        elif badguy2.x > 750:
+            reverse = True
+    if reverse == True:          #switches bad guy directions
+        badguy2 = uvage.from_image(750, 490, 'ghostimage-removebg-preview.png')
+        badguy = uvage.from_image(50, 120, 'ghostimage-removebg-preview.png')
+        badguy.size = [30,30]
+        badguy2.size = [30,30]
+    camera.draw(badguy)
+    camera.draw(badguy2)
+    # If we hit our bad guy the game ends
+    if pacman.touches(badguy):
+        gameover = True
+        gameon = False
+        win = False
+        set_up = False
+    if pacman.touches(badguy2):
+        gameover = True
+        gameon = False
+        win = False
+        set_up = False
+
+
+def handle_movement():
+    """
+    This function handles pacman orientation, pacman sprite sheet images, and pacman motion based on player control
+    :return: None
+    """
+    global camera, frame, facing_right, walls, facing_up, is_moving, facing_down, gameon, gameover, lost, timer
+    global pacman, pacman_images
+    is_moving = False
+    if gameon == True:
+        if uvage.is_pressing('up arrow'):
+            if facing_right == True and facing_up == False and facing_down == False: #right to up motion
+                facing_right = False
+                pacman.rotate(90)
+                facing_up = True
+            is_moving = True
+            pacman.y -= 2
+            if facing_right == False and facing_up == False and facing_down == False:    #left to up motion
+                facing_up = True
+                facing_right = False
+                pacman.flip()
+                pacman.rotate(90)
+            is_moving = True
+            pacman.y -= 2
+            if facing_up == True and facing_down == False:      #up to up motion
+                facing_up = True
+            is_moving = True
+            pacman.y -= 2
+            if facing_down == True and facing_up == False:      #down to up motion
+                facing_up = True
+                facing_down = False
+                pacman.rotate(180)
+            is_moving = True
+            pacman.y -= 2
+        if uvage.is_pressing('down arrow'):
+            if facing_right == True and facing_up == False and facing_down == False:    #right to down motion
+                facing_right = False
+                facing_down = True
+                pacman.rotate(270)
+                facing_up = False
+            is_moving = True
+            pacman.y += 2
+            if facing_right == False and facing_up == False and facing_down == False:    #Left to down motion
+                facing_up = False
+                facing_down = True
+                facing_right = False
+                pacman.flip()
+                pacman.rotate(270)
+            is_moving = True
+            pacman.y += 2
+            if facing_up == False and facing_down == True:      #down to down motion
+                facing_up = False
+                facing_down = True
+            is_moving = True
+            pacman.y += 2
+            if facing_up == True and facing_down == False:      #up to down motion
+                facing_up = False
+                facing_down = True
+                pacman.rotate(180)
+            is_moving = True
+            pacman.y += 2
+        if uvage.is_pressing("right arrow"):
+            if not facing_right and facing_up == False and facing_down == False:    #left to right motion
+                facing_right = True
+                pacman.flip()
+            is_moving = True
+            pacman.x += 2
+            if facing_down == True:     #these if statements orient the spritesheet images so that pacman doesn't flip upside down
+                facing_right = True
+                facing_down = False
+                pacman.rotate(90)
+            is_moving = True
+            pacman.x += 2
+            if facing_up == True:
+                facing_right = True
+                facing_up = False
+                pacman.rotate(270)
+            is_moving = True
+            pacman.x += 2
+        if uvage.is_pressing("left arrow"):
+            if facing_right== True and facing_up == False and facing_down == False:    #right to left motion
+                facing_right = False
+                pacman.flip()
+            is_moving = True
+            pacman.x -= 2
+            if facing_right == False:   #left to left motion
+                is_moving = True
+                pacman.x -= 2
+            if facing_up == True:
+                facing_up = False
+                facing_right = False
+                pacman.flip()
+                pacman.rotate(270)
+            is_moving = True
+            pacman.x -= 2
+            if facing_down == True:
+                facing_right = False
+                facing_down = False
+                pacman.flip()
+                pacman.rotate(90)
+            is_moving = True
+            pacman.x -= 2
+        if not is_moving:       #if pacman isn't moving, display one single image without change
+            pacman.image = pacman_images[1]
+        else:       #if pacman is moving, change the pacman sprite image
+            frame += .3
+            if frame >= 5:
+                frame = 0
+            pacman.image = pacman_images[int(frame)]
+    camera.draw(pacman)
+
+    for w in walls:     #pacman will never go through any of the maze or off screen
+        pacman.move_to_stop_overlapping(w)
+    pacman.move_speed()
+    if pacman.touches(w):
+        pacman.move_to_stop_overlapping(w)
+
+
+def handle_coins():
+    """
+    This function makes coins disappear after pacman touches them and if he collects them all the game displays
+    the win screen and allows the player to play again
+    :return: None
+    """
+    global pacman, coins, timer, timer_display, coinstouched, win, walls
+    for coin in coins:      #manages coins disappearing after touching by moving off screen
+        if pacman.touches(coin):
+            coin.x = 900
+            coinstouched += 1
+        camera.draw(coin)
+    if coinstouched == len(coins):      #if all the coins have been touched, you win the game
+        win = True
+
+
+def timerfunction():
+    """
+    This function displays how much time the player has to collect all pieces before the game is over, if the player
+    runs out of time, this function will trigger the GameOver Screen
+    :return: None
+    """
+    global timer, timer_display, gameover, gameon, lost, gameover, gameon, win, winmessage
+    if gameon == True:      #countdown before gameover
+        timer -= .030
+        camera.draw("Time Left: " + str(int(timer)), 36, "red", 100, 30)
+        if timer < 0:       #player is out of time
+            set_up = False
+            gameover = True
+            gameon = False
+    winmessage = uvage.from_text(400, 250, 'You Win! Press R to play again', 55, "red", True)
+
+
+def tick():
+    """
+    This function runs the game at 30 frames per second
+    :return: None
+    """
+    camera.clear('black')
+    draw_environment()
+    handle_movement()
+    timerfunction()
+    handle_badguy()
+    handle_coins()
+    camera.display()
+
+
+reset()
+uvage.timer_loop(30, tick)
